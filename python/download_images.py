@@ -29,8 +29,16 @@ def query_search_api(min_lat, max_lat, min_lon, max_lon, max_results):
     params = urllib.urlencode(zip(['min-lat', 'max-lat', 'min-lon', 'max-lon', 'max-results'],[min_lat, max_lat, min_lon, max_lon, max_results]))
     query = urllib2.urlopen(MAPILLARY_API_IM_SEARCH_URL + params).read()
     query = json.loads(query)
-    print("Result: {0} images in area.".format(len(query)))
-    return query
+    if len(query) == max_results:
+        halfway_lat = (min_lat + max_lat)/2.0
+        halfway_lon = (min_lon + max_lon)/2.0
+        part1 = query_search_api(min_lat, halfway_lat, min_lon, halfway_lon, max_results)
+        part2 = query_search_api(min_lat, halfway_lat, halfway_lon, max_lon, max_results)
+        part3 = query_search_api(halfway_lat, max_lat, min_lon, halfway_lon, max_results)
+        part4 = query_search_api(halfway_lat, max_lat, halfway_lon, max_lon, max_results)
+        return part1 + part2 + part3 + part4
+    else:
+        return query
 
 
 def download_images(query, path, size=1024):
@@ -67,7 +75,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--city_name', default='pgh')
     parser.add_argument('--max_results', default=1000)
-    parser.add_argument('--neighborhoods_file', default='nghd_bounds.geojson')
+    parser.add_argument('--neighborhoods_file', default='pgh_nghd_bounds.geojson')
     parser.add_argument('--image_size', type=int, default=1024, choices=[320,640,1024,2048])
     args = parser.parse_args()
 
@@ -79,8 +87,7 @@ if __name__ == '__main__':
 
         # query api
         query = query_search_api(min_lat, max_lat, min_lon, max_lon, args.max_results)
-        if len(query) == args.max_results:
-            pass # TODO do something b/c you might be missing some.
+        print("Result: {0} images in area.".format(len(query)))
 
         nghd_dir = args.city_name + "/" + nghd_name + "/"
         # create directories for saving
@@ -96,11 +103,10 @@ if __name__ == '__main__':
                 url = im['image_url']+im_size
                 filename = im['key']+".jpg"
                 try:
-                    print nghd_dir+filename
                     image = urllib.URLopener()
                     image.retrieve(url, nghd_dir+filename)
                     downloaded_list.append([filename, str(im['lat']), str(im['lon'])])
-                    print("Successfully downloaded: {0}".format(filename))
+                    # print("Successfully downloaded: {0}".format(filename))
                 except KeyboardInterrupt:
                     break
                 except:
