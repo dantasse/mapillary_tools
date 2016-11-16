@@ -26,10 +26,22 @@ def query_search_api(min_lat, max_lat, min_lon, max_lon, max_results):
     '''
     Send query to the search API and get dict with image data.
     '''
+    print "Querying ", min_lat, max_lat, min_lon, max_lon 
     params = urllib.urlencode(zip(['min-lat', 'max-lat', 'min-lon', 'max-lon', 'max-results'],[min_lat, max_lat, min_lon, max_lon, max_results]))
-    query = urllib2.urlopen(MAPILLARY_API_IM_SEARCH_URL + params).read()
-    query = json.loads(query)
+    tries = 0
+    while tries < 5:
+        try:
+            query = urllib2.urlopen(MAPILLARY_API_IM_SEARCH_URL + params).read()
+            query = json.loads(query)
+            break
+        except:
+            tries += 1
+    if tries >= 5:
+        print "Failed 5 times, skipping this batch."
+        return []
+
     if len(query) == max_results:
+        print "Too many results; splitting into 4 sub-queries."
         halfway_lat = (min_lat + max_lat)/2.0
         halfway_lon = (min_lon + max_lon)/2.0
         part1 = query_search_api(min_lat, halfway_lat, min_lon, halfway_lon, max_results)
@@ -39,7 +51,6 @@ def query_search_api(min_lat, max_lat, min_lon, max_lon, max_results):
         return part1 + part2 + part3 + part4
     else:
         return query
-
 
 def download_images(query, path, size=1024):
     '''
@@ -74,7 +85,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--city_name', default='pgh')
-    parser.add_argument('--max_results', default=1000)
+    parser.add_argument('--max_results', type=int, default=1000)
     parser.add_argument('--neighborhoods_file', default='pgh_nghd_bounds.geojson')
     parser.add_argument('--image_size', type=int, default=1024, choices=[320,640,1024,2048])
     args = parser.parse_args()
@@ -86,6 +97,7 @@ if __name__ == '__main__':
         min_lon, min_lat, max_lon, max_lat = nghd_shape.bounds
 
         # query api
+        print("Searching for this neighborhood: " + nghd_name)
         query = query_search_api(min_lat, max_lat, min_lon, max_lon, args.max_results)
         print("Result: {0} images in area.".format(len(query)))
 
